@@ -11,6 +11,7 @@ License:        BSD
 URL:            https://www.openssh.com/
 Source0:        openssh-10.3p1.tar.gz
 Source1:        openssl-3.6.2.tar.gz
+Source2:        sshd.service
 
 BuildRequires:  gcc, make, perl, pam-devel, zlib-devel, perl-interpreter
 Obsoletes:      openssh-server, openssh, openssh-clients, openssh-help
@@ -44,10 +45,15 @@ make install DESTDIR=%{buildroot}
 # Create /var/empty for privilege separation
 mkdir -p -m 0755 %{buildroot}/var/empty
 
-# Remove static OpenSSL libs/include from package - they're embedded
+# Install systemd service file
+mkdir -p %{buildroot}%{_unitdir}
+install -m 644 %{SOURCE2} %{buildroot}%{_unitdir}/sshd.service
+
+# Remove static OpenSSL libs/include from package - they are embedded
 rm -rf %{buildroot}/usr/local
 
 %files
+%{_unitdir}/sshd.service
 %dir %attr(0755,root,root) /var/empty
 %attr(0755,root,root) %{_bindir}/ssh
 %attr(0755,root,root) %{_bindir}/scp
@@ -91,10 +97,8 @@ fi
 
 %post
 # Restore host keys if needed
-if [ -d /tmp/ssh-hostkeys-backup ] && [ "$(ls -A /tmp/ssh-hostkeys-backup/ 2>/dev/null)" ]; then
-    if [ ! -f /etc/ssh/ssh_host_ed25519_key ]; then
-        cp -a /tmp/ssh-hostkeys-backup/ssh_host_* /etc/ssh/ 2>/dev/null || true
-    fi
+if [ -f /tmp/ssh-hostkeys-backup/ssh_host_ed25519_key ]; then
+    cp -a /tmp/ssh-hostkeys-backup/ssh_host_* /etc/ssh/ 2>/dev/null || true
     rm -rf /tmp/ssh-hostkeys-backup
 fi
 
@@ -105,18 +109,20 @@ sed -i 's/^RSAAuthentication/#RSAAuthentication/' /etc/ssh/sshd_config 2>/dev/nu
 sed -i 's/^RhostsRSAAuthentication/#RhostsRSAAuthentication/' /etc/ssh/sshd_config 2>/dev/null || true
 sed -i 's/^GSSAPIKexAlgorithms/#GSSAPIKexAlgorithms/' /etc/ssh/sshd_config 2>/dev/null || true
 
-# Restart sshd to apply
+# Reload systemd and enable/start sshd
+systemctl daemon-reload 2>/dev/null || true
+systemctl enable sshd 2>/dev/null || true
 systemctl try-restart sshd 2>/dev/null || systemctl restart sshd 2>/dev/null || true
 
 %preun
-if [ $1 -eq 0 ]; then
-    # Stop sshd before removal
+if [  -eq 0 ]; then
     systemctl stop sshd 2>/dev/null || true
+    systemctl disable sshd 2>/dev/null || true
 fi
 
 %postun
-if [ $1 -ge 1 ]; then
-    # Upgrade - restart sshd
+if [  -ge 1 ]; then
+    systemctl daemon-reload 2>/dev/null || true
     systemctl try-restart sshd 2>/dev/null || systemctl restart sshd 2>/dev/null || true
 fi
 
@@ -125,4 +131,5 @@ fi
 - OpenSSH 10.3p1 with static OpenSSL 3.6.2
 - Built for Kylin V10 (glibc 2.28) compatibility
 - PAM authentication retained via dynamic linking
+- Includes systemd service file
 
