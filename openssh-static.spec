@@ -13,7 +13,7 @@ Source0:        openssh-10.3p1.tar.gz
 Source1:        openssl-3.6.2.tar.gz
 
 BuildRequires:  gcc, make, perl, pam-devel, zlib-devel, perl-interpreter
-Conflicts:      openssh-server, openssh, openssh-clients
+Obsoletes:      openssh-server, openssh, openssh-clients
 Provides:       openssh-server, openssh, openssh-clients
 
 %description
