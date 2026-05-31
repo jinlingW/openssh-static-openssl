@@ -163,6 +163,9 @@ sed -i 's|/usr/libexec/openssh/sftp-server|/usr/libexec/sftp-server|g' /etc/ssh/
 # Reload systemd and enable/start sshd
 systemctl daemon-reload 2>/dev/null || true
 systemctl enable sshd 2>/dev/null || true
+
+%posttrans
+# Restart after all package scripts complete (avoid race with old package %preun)
 systemctl try-restart sshd 2>/dev/null || systemctl restart sshd 2>/dev/null || true
 
 %preun
@@ -183,4 +186,6 @@ fi
 - Built for Kylin V10 (glibc 2.28) compatibility
 - PAM authentication retained via dynamic linking
 - Complete systemd units, PAM config, sshd-keygen included
+
+
 
