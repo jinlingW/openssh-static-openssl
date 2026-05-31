@@ -12,6 +12,16 @@ URL:            https://www.openssh.com/
 Source0:        openssh-10.3p1.tar.gz
 Source1:        openssl-3.6.2.tar.gz
 Source2:        sshd.service
+Source3:        pam.sshd
+Source4:        sysconfig.sshd
+Source5:        05-redhat.conf
+Source6:        sshd-keygen.target
+Source7:        sshd-keygen@.service
+Source8:        sshd@.service
+Source9:        sshd.socket
+Source10:       openssh.conf
+Source11:       ssh-copy-id
+Source12:       sshd-keygen
 
 BuildRequires:  gcc, make, perl, pam-devel, zlib-devel, perl-interpreter
 Obsoletes:      openssh-server, openssh, openssh-clients, openssh-help
@@ -42,19 +52,57 @@ make -j16
 cd %{_builddir}/openssh-10.3p1
 make install DESTDIR=%{buildroot}
 
-# Create /var/empty for privilege separation
-mkdir -p -m 0755 %{buildroot}/var/empty
-
-# Install systemd service file
+# Create directories
+mkdir -p -m 0755 %{buildroot}/var/empty/sshd
 mkdir -p %{buildroot}%{_unitdir}
-install -m 644 %{SOURCE2} %{buildroot}%{_unitdir}/sshd.service
+mkdir -p %{buildroot}%{_sysconfdir}/pam.d
+mkdir -p %{buildroot}%{_sysconfdir}/sysconfig
+mkdir -p %{buildroot}%{_sysconfdir}/ssh/ssh_config.d
+mkdir -p %{buildroot}/usr/libexec/openssh
+mkdir -p %{buildroot}%{_tmpfilesdir}
 
-# Remove static OpenSSL libs/include from package - they are embedded
+# Install systemd units
+install -m 644 %{SOURCE2} %{buildroot}%{_unitdir}/sshd.service
+install -m 644 %{SOURCE6} %{buildroot}%{_unitdir}/sshd-keygen.target
+install -m 644 %{SOURCE7} %{buildroot}%{_unitdir}/sshd-keygen@.service
+install -m 644 %{SOURCE8} %{buildroot}%{_unitdir}/sshd@.service
+install -m 644 %{SOURCE9} %{buildroot}%{_unitdir}/sshd.socket
+
+# Install config files
+install -m 644 %{SOURCE3} %{buildroot}%{_sysconfdir}/pam.d/sshd
+install -m 644 %{SOURCE4} %{buildroot}%{_sysconfdir}/sysconfig/sshd
+install -m 644 %{SOURCE5} %{buildroot}%{_sysconfdir}/ssh/ssh_config.d/05-redhat.conf
+install -m 644 %{SOURCE10} %{buildroot}%{_tmpfilesdir}/openssh.conf
+
+# Install helper scripts
+install -m 755 %{SOURCE11} %{buildroot}%{_bindir}/ssh-copy-id
+install -m 755 %{SOURCE12} %{buildroot}/usr/libexec/openssh/sshd-keygen
+
+# Remove static OpenSSL libs/include from package
 rm -rf %{buildroot}/usr/local
 
 %files
+# Systemd units
 %{_unitdir}/sshd.service
-%dir %attr(0755,root,root) /var/empty
+%{_unitdir}/sshd-keygen.target
+%{_unitdir}/sshd-keygen@.service
+%{_unitdir}/sshd@.service
+%{_unitdir}/sshd.socket
+
+# Config files (noreplace)
+%config(noreplace) %{_sysconfdir}/pam.d/sshd
+%config(noreplace) %{_sysconfdir}/sysconfig/sshd
+%config(noreplace) %{_sysconfdir}/ssh/ssh_config.d/05-redhat.conf
+%config(noreplace) %{_sysconfdir}/ssh/ssh_config
+%config(noreplace) %{_sysconfdir}/ssh/sshd_config
+%config(noreplace) %{_sysconfdir}/ssh/moduli
+%{_tmpfilesdir}/openssh.conf
+
+# Directories
+%dir %attr(0755,root,root) /var/empty/sshd
+%dir /usr/libexec/openssh
+
+# Binaries
 %attr(0755,root,root) %{_bindir}/ssh
 %attr(0755,root,root) %{_bindir}/scp
 %attr(0755,root,root) %{_bindir}/ssh-add
@@ -62,6 +110,7 @@ rm -rf %{buildroot}/usr/local
 %attr(0755,root,root) %{_bindir}/ssh-keygen
 %attr(0755,root,root) %{_bindir}/ssh-keyscan
 %attr(0755,root,root) %{_bindir}/sftp
+%attr(0755,root,root) %{_bindir}/ssh-copy-id
 %attr(0755,root,root) %{_sbindir}/sshd
 %attr(0755,root,root) %{_libexecdir}/sshd-session
 %attr(0755,root,root) %{_libexecdir}/sshd-auth
@@ -69,6 +118,9 @@ rm -rf %{buildroot}/usr/local
 %attr(0755,root,root) %{_libexecdir}/ssh-pkcs11-helper
 %attr(0755,root,root) %{_libexecdir}/ssh-sk-helper
 %attr(0755,root,root) %{_libexecdir}/sftp-server
+%attr(0755,root,root) /usr/libexec/openssh/sshd-keygen
+
+# Man pages
 %{_mandir}/man1/ssh.1*
 %{_mandir}/man1/scp.1*
 %{_mandir}/man1/ssh-add.1*
@@ -84,22 +136,18 @@ rm -rf %{buildroot}/usr/local
 %{_mandir}/man8/ssh-keysign.8*
 %{_mandir}/man8/ssh-pkcs11-helper.8*
 %{_mandir}/man8/ssh-sk-helper.8*
-%config(noreplace) %{_sysconfdir}/ssh/ssh_config
-%config(noreplace) %{_sysconfdir}/ssh/sshd_config
-%config(noreplace) %{_sysconfdir}/ssh/moduli
 
 %pre
-# Backup existing host keys before upgrade
-if [ -d /etc/ssh ]; then
-    mkdir -p /tmp/ssh-hostkeys-backup
-    cp -a /etc/ssh/ssh_host_* /tmp/ssh-hostkeys-backup/ 2>/dev/null || true
+if [ -d /etc/ssh ] && [ -f /etc/ssh/ssh_host_ed25519_key ]; then
+    mkdir -p /tmp/ssh-hk-bak
+    cp -a /etc/ssh/ssh_host_* /tmp/ssh-hk-bak/ 2>/dev/null || true
 fi
 
 %post
-# Restore host keys if needed
-if [ -f /tmp/ssh-hostkeys-backup/ssh_host_ed25519_key ]; then
-    cp -a /tmp/ssh-hostkeys-backup/ssh_host_* /etc/ssh/ 2>/dev/null || true
-    rm -rf /tmp/ssh-hostkeys-backup
+# Restore host keys
+if [ -f /tmp/ssh-hk-bak/ssh_host_ed25519_key ]; then
+    cp -a /tmp/ssh-hk-bak/ssh_host_* /etc/ssh/ 2>/dev/null || true
+    rm -rf /tmp/ssh-hk-bak
 fi
 
 # Fix incompatible config options for OpenSSH 10.x
@@ -108,6 +156,9 @@ sed -i 's/^GSSAPICleanupCredentials/#GSSAPICleanupCredentials/' /etc/ssh/sshd_co
 sed -i 's/^RSAAuthentication/#RSAAuthentication/' /etc/ssh/sshd_config 2>/dev/null || true
 sed -i 's/^RhostsRSAAuthentication/#RhostsRSAAuthentication/' /etc/ssh/sshd_config 2>/dev/null || true
 sed -i 's/^GSSAPIKexAlgorithms/#GSSAPIKexAlgorithms/' /etc/ssh/sshd_config 2>/dev/null || true
+
+# Fix sftp-server subsystem path for OpenSSH 10.x
+sed -i 's|/usr/libexec/openssh/sftp-server|/usr/libexec/sftp-server|g' /etc/ssh/sshd_config 2>/dev/null || true
 
 # Reload systemd and enable/start sshd
 systemctl daemon-reload 2>/dev/null || true
@@ -131,5 +182,5 @@ fi
 - OpenSSH 10.3p1 with static OpenSSL 3.6.2
 - Built for Kylin V10 (glibc 2.28) compatibility
 - PAM authentication retained via dynamic linking
-- Includes systemd service file
+- Complete systemd units, PAM config, sshd-keygen included
 
