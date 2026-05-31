@@ -13,7 +13,7 @@ Source0:        openssh-10.3p1.tar.gz
 Source1:        openssl-3.6.2.tar.gz
 
 BuildRequires:  gcc, make, perl, pam-devel, zlib-devel, perl-interpreter
-Obsoletes:      openssh-server, openssh, openssh-clients
+Obsoletes:      openssh-server, openssh, openssh-clients, openssh-help
 Provides:       openssh-server, openssh, openssh-clients
 
 %description
@@ -125,5 +125,4 @@ fi
 - OpenSSH 10.3p1 with static OpenSSL 3.6.2
 - Built for Kylin V10 (glibc 2.28) compatibility
 - PAM authentication retained via dynamic linking
-
 
