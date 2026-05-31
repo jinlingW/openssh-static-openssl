@@ -151,22 +151,22 @@ if [ -f /tmp/ssh-hk-bak/ssh_host_ed25519_key ]; then
 fi
 
 # Fix incompatible config options for OpenSSH 10.x
-sed -i 's/^GSSAPIAuthentication/#GSSAPIAuthentication/' /etc/ssh/sshd_config 2>/dev/null || true
-sed -i 's/^GSSAPICleanupCredentials/#GSSAPICleanupCredentials/' /etc/ssh/sshd_config 2>/dev/null || true
-sed -i 's/^RSAAuthentication/#RSAAuthentication/' /etc/ssh/sshd_config 2>/dev/null || true
-sed -i 's/^RhostsRSAAuthentication/#RhostsRSAAuthentication/' /etc/ssh/sshd_config 2>/dev/null || true
-sed -i 's/^GSSAPIKexAlgorithms/#GSSAPIKexAlgorithms/' /etc/ssh/sshd_config 2>/dev/null || true
+sed -i "s/^GSSAPIAuthentication/#GSSAPIAuthentication/" /etc/ssh/sshd_config 2>/dev/null || true
+sed -i "s/^GSSAPICleanupCredentials/#GSSAPICleanupCredentials/" /etc/ssh/sshd_config 2>/dev/null || true
+sed -i "s/^RSAAuthentication/#RSAAuthentication/" /etc/ssh/sshd_config 2>/dev/null || true
+sed -i "s/^RhostsRSAAuthentication/#RhostsRSAAuthentication/" /etc/ssh/sshd_config 2>/dev/null || true
+sed -i "s/^GSSAPIKexAlgorithms/#GSSAPIKexAlgorithms/" /etc/ssh/sshd_config 2>/dev/null || true
 
 # Fix sftp-server subsystem path for OpenSSH 10.x
-sed -i 's|/usr/libexec/openssh/sftp-server|/usr/libexec/sftp-server|g' /etc/ssh/sshd_config 2>/dev/null || true
+sed -i "s|/usr/libexec/openssh/sftp-server|/usr/libexec/sftp-server|g" /etc/ssh/sshd_config 2>/dev/null || true
 
-# Reload systemd and enable/start sshd
+# Reload systemd
 systemctl daemon-reload 2>/dev/null || true
-systemctl enable sshd 2>/dev/null || true
 
 %posttrans
-# Restart after all package scripts complete (avoid race with old package %preun)
-systemctl try-restart sshd 2>/dev/null || systemctl restart sshd 2>/dev/null || true
+# enable+start AFTER all old package scripts complete
+systemctl enable sshd 2>/dev/null || true
+systemctl start sshd 2>/dev/null || true
 
 %preun
 if [  -eq 0 ]; then
@@ -186,6 +186,8 @@ fi
 - Built for Kylin V10 (glibc 2.28) compatibility
 - PAM authentication retained via dynamic linking
 - Complete systemd units, PAM config, sshd-keygen included
+
+
 
 
 
